@@ -4,8 +4,6 @@ import akka.actor.{Address, ActorSystem, ActorRef, Actor}
 import idb.Relation
 import idb.observer.Observable
 
-import scala.concurrent.Await
-
 object ObservableHost {
   sealed trait HostMessage
   case class HostObservableAndForward[T](obs: Observable[T], target: ActorRef)/*(implicit pickler: Pickler[T])*/ extends HostMessage
