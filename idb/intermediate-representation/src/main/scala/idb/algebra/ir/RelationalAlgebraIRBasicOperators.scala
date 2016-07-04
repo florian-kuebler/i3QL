@@ -33,7 +33,10 @@
 package idb.algebra.ir
 
 import idb.algebra.base.RelationalAlgebraBasicOperators
-import idb.query.{QueryEnvironment, RemoteDescription}
+import idb.algebra.exceptions.NonMatchingHostsException
+import idb.lms.extensions.{FunctionUtils, RemoteUtils}
+import idb.query.{Host, QueryEnvironment}
+import idb.query.colors.{ClassColor, Color, FieldColor, FieldName}
 
 
 /**
@@ -42,8 +45,11 @@ import idb.query.{QueryEnvironment, RemoteDescription}
  *
  */
 trait RelationalAlgebraIRBasicOperators
-    extends RelationalAlgebraIRBase with RelationalAlgebraBasicOperators
+    extends RelationalAlgebraIRBase
+		with RelationalAlgebraBasicOperators
+		with RemoteUtils
 {
+
     case class Projection[Domain : Manifest, Range : Manifest] (
         var relation: Rep[Query[Domain]],
         function: Rep[Domain => Range]
@@ -51,12 +57,13 @@ trait RelationalAlgebraIRBasicOperators
 		val mDom = implicitly[Manifest[Domain]]
 		val mRan = implicitly[Manifest[Domain]]
 
-		def isMaterialized: Boolean = relation.isMaterialized
-		def isSet = false
-		def isIncrementLocal = relation.isIncrementLocal
-		def remoteDesc = relation.remoteDesc
+		override def isMaterialized: Boolean = relation.isMaterialized
+		override def isSet = false
+		override def isIncrementLocal = relation.isIncrementLocal
 
-    }
+		override def color = projectionColor(relation.color, function)
+		override def host = relation.host
+	}
 
     case class Selection[Domain: Manifest] (
         var relation: Rep[Query[Domain]],
@@ -64,10 +71,13 @@ trait RelationalAlgebraIRBasicOperators
     ) extends Def[Query[Domain]] with QueryBaseOps {
         val mDom = implicitly[Manifest[Domain]]
 
-		def isMaterialized: Boolean = relation.isMaterialized
-		def isSet = false
-		def isIncrementLocal = relation.isIncrementLocal
-		def remoteDesc = relation.remoteDesc
+		override def isMaterialized: Boolean = relation.isMaterialized
+		override def isSet = false
+		override def isIncrementLocal = relation.isIncrementLocal
+
+		override def color =
+			Color.union(relation.color, Color.fromIdsInColors(colorsOfTFields(function, relation.color)))
+		override def host = relation.host
 	}
 
     case class CrossProduct[DomainA: Manifest, DomainB: Manifest] (
@@ -78,84 +88,122 @@ trait RelationalAlgebraIRBasicOperators
         val mDomA = implicitly[Manifest[DomainA]]
         val mDomB = implicitly[Manifest[DomainB]]
 
-		def isMaterialized: Boolean = relationA.isMaterialized && relationB.isMaterialized && !isIncrementLocal
-		def isSet = false
-		def isIncrementLocal = relationA.isIncrementLocal && relationB.isIncrementLocal
-		def remoteDesc = RemoteDescription.join(relationA.remoteDesc, relationB.remoteDesc)
+		override def isMaterialized: Boolean = relationA.isMaterialized && relationB.isMaterialized && !isIncrementLocal
+		override def isSet = false
+		override def isIncrementLocal = relationA.isIncrementLocal && relationB.isIncrementLocal
+
+		override def color = Color.tupled(relationA.color, relationB.color)
+
+		override def host = {
+			if (relationA.host != relationB.host)
+				throw new NonMatchingHostsException(relationA.host, relationB.host)
+			relationA.host
+		}
     }
 
     case class EquiJoin[DomainA: Manifest, DomainB: Manifest] (
         var relationA: Rep[Query[DomainA]],
         var relationB: Rep[Query[DomainB]],
         equalities: List[(Rep[DomainA => Any], Rep[DomainB => Any])]
-    ) extends Def[Query[(DomainA, DomainB)]] with QueryBaseOps {
+	) extends Def[Query[(DomainA, DomainB)]] with QueryBaseOps {
 
 		val mDomA = implicitly[Manifest[DomainA]]
 		val mDomB = implicitly[Manifest[DomainB]]
 
-		def isMaterialized: Boolean = relationA.isMaterialized && relationB.isMaterialized && !isIncrementLocal
-		def isSet = false
-		def isIncrementLocal = relationA.isIncrementLocal && relationB.isIncrementLocal
-		def remoteDesc = RemoteDescription.join(relationA.remoteDesc, relationB.remoteDesc)
+		override def isMaterialized: Boolean = relationA.isMaterialized && relationB.isMaterialized && !isIncrementLocal
+		override def isSet = false
+		override def isIncrementLocal = relationA.isIncrementLocal && relationB.isIncrementLocal
+
+		override def color = {
+			val e = equalities.foldRight(Predef.Set.empty[Color])((a, b) => colorsOfTFields(a._1, relationA.color))
+			val f = equalities.foldRight(Predef.Set.empty[Color])((a, b) => colorsOfTFields(a._2, relationB.color))
+
+			val eUnionF = Color.union(Color.fromIdsInColors(e), Color.fromIdsInColors(f))
+			Color.tupled(Color.union(relationA.color, eUnionF), Color.union(relationB.color, eUnionF))
+		}
+
+		override def host = {
+			if (relationA.host != relationB.host)
+				throw new NonMatchingHostsException(relationA.host, relationB.host)
+			relationA.host
+		}
 	}
 
     case class DuplicateElimination[Domain: Manifest] (
         var relation: Rep[Query[Domain]]
     ) extends Def[Query[Domain]] with QueryBaseOps {
 
-		def isMaterialized: Boolean = !isIncrementLocal //Duplicate Elimination stores intermediate objects and therefore implements foreach
-		def isSet = false
-		def isIncrementLocal = relation.isIncrementLocal
-		def remoteDesc = relation.remoteDesc
+		override def isMaterialized: Boolean = !isIncrementLocal //Duplicate Elimination stores intermediate objects and therefore implements foreach
+		override def isSet = false
+		override def isIncrementLocal = relation.isIncrementLocal
+
+		override def color = relation.color
+		override def host = relation.host
+
 	}
 
     case class Unnest[Domain: Manifest, Range: Manifest] (
         var relation: Rep[Query[Domain]],
         unnesting: Rep[Domain => Traversable[Range]]
-    ) extends Def[Query[(Domain,Range)]] with QueryBaseOps {
+	) extends Def[Query[(Domain,Range)]] with QueryBaseOps {
 
-		def isMaterialized: Boolean = relation.isMaterialized
-		def isSet = false
-		def isIncrementLocal = relation.isIncrementLocal
-		def remoteDesc = relation.remoteDesc
+		override def isMaterialized: Boolean = relation.isMaterialized
+		override def isSet = false
+		override def isIncrementLocal = relation.isIncrementLocal
+
+		override def color = Color.tupled(relation.color, Color.fromIdsInColors(colorsOfTFields(unnesting, relation.color)))
+		override def host = relation.host
 	}
 
 
-    def projection[Domain: Manifest, Range: Manifest] (
+    override def projection[Domain: Manifest, Range: Manifest] (
         relation: Rep[Query[Domain]],
         function: Rep[Domain => Range]
     )(implicit queryEnvironment : QueryEnvironment): Rep[Query[Range]] =
-        Projection (relation, function)
+		Projection (relation, function)
 
-    def selection[Domain: Manifest] (
+
+	override def selection[Domain: Manifest] (
         relation: Rep[Query[Domain]],
         function: Rep[Domain => Boolean]
-    )(implicit queryEnvironment : QueryEnvironment): Rep[Query[Domain]] =
-        Selection (relation, function)
+    )(implicit queryEnvironment : QueryEnvironment): Rep[Query[Domain]] = {
+		Selection (relation, function)
+	}
 
-    def crossProduct[DomainA: Manifest, DomainB: Manifest] (
+
+
+
+	override def crossProduct[DomainA: Manifest, DomainB: Manifest] (
         relationA: Rep[Query[DomainA]],
         relationB: Rep[Query[DomainB]]
     )(implicit queryEnvironment : QueryEnvironment): Rep[Query[(DomainA, DomainB)]] =
-        CrossProduct (relationA, relationB)
+		CrossProduct (relationA, relationB)
 
-    def equiJoin[DomainA: Manifest, DomainB: Manifest] (
+
+
+
+	override def equiJoin[DomainA: Manifest, DomainB: Manifest] (
         relationA: Rep[Query[DomainA]],
         relationB: Rep[Query[DomainB]],
         equalities: List[(Rep[DomainA => Any], Rep[DomainB => Any])]
     )(implicit queryEnvironment : QueryEnvironment): Rep[Query[(DomainA, DomainB)]] =
-        EquiJoin (relationA, relationB, equalities)
+		EquiJoin (relationA, relationB, equalities)
 
-    def duplicateElimination[Domain: Manifest] (
+
+	override def duplicateElimination[Domain: Manifest] (
         relation: Rep[Query[Domain]]
     )(implicit queryEnvironment : QueryEnvironment): Rep[Query[Domain]] =
-        DuplicateElimination (relation)
+		DuplicateElimination (relation)
 
-   def unnest[Domain: Manifest, Range: Manifest] (
+
+
+	override def unnest[Domain: Manifest, Range: Manifest] (
         relation: Rep[Query[Domain]],
         unnesting: Rep[Domain => Traversable[Range]]
     )(implicit queryEnvironment : QueryEnvironment): Rep[Query[(Domain, Range)]] =
-        Unnest (relation, unnesting)
+	   Unnest (relation, unnesting)
+
+
 
 }
 

@@ -33,6 +33,7 @@
 package idb.algebra.base
 
 import idb.query._
+import idb.query.colors.Color
 
 import scala.language.higherKinds
 import scala.virtualization.lms.common.Base
@@ -64,18 +65,20 @@ trait RelationalAlgebraBase
     /**
      * Wraps an table as a leaf in the query tree
      */
-    def table[Domain] (table: Table[Domain], isSet: Boolean = false,  host : Host = LocalHost, remote : RemoteDescription = DefaultDescription)(
+    def table[Domain]  (table: Table[Domain], isSet: Boolean = false, color : Color = Color.NO_COLOR, host : Host = Host.local)(
         implicit mDom: Manifest[Domain],
-        mRel: Manifest[Table[Domain]]
+        mRel: Manifest[Table[Domain]],
+		queryEnvironment : QueryEnvironment
     ): Rep[Query[Domain]]
 
 
     /**
      * Wraps a compiled relation again as a leaf in the query tree
      */
-    def relation[Domain] (relation: Relation[Domain], isSet: Boolean = false)(
+    def relation[Domain]  (relation: Relation[Domain], isSet: Boolean = false, color : Color = Color.NO_COLOR, host : Host = Host.local)(
         implicit mDom: Manifest[Domain],
-        mRel: Manifest[Relation[Domain]]
+        mRel: Manifest[Relation[Domain]],
+		queryEnvironment : QueryEnvironment
     ): Rep[Query[Domain]]
 
 	/**

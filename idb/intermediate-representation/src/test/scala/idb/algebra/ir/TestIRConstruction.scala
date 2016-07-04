@@ -55,7 +55,7 @@ class TestIRConstruction
 		implicit val local = QueryEnvironment.Local
 
         val f = fun ((x: Rep[Int]) => x > 0)
-        val exp = selection (emptyRelation[Int](), f)
+        val exp = selection (emptyRelation[Int], f)
         val s = syms (exp)(0)
         val d = findDefinition (s) match {
             case Some (TP (_, rhs)) => rhs
@@ -63,7 +63,7 @@ class TestIRConstruction
         }
 
         assertEquals (
-            Selection (emptyRelation[Int](), f),
+            Selection (emptyRelation[Int], f),
             d
         )
     }
@@ -74,8 +74,8 @@ class TestIRConstruction
 		implicit val local = QueryEnvironment.Local
 
 		val f = fun ((x: Rep[Int]) => x > 0)
-        val exp1 = selection (emptyRelation[Int](), f)
-        val exp2 = selection (emptyRelation[Int](), f)
+        val exp1 = selection (emptyRelation[Int], f)
+        val exp2 = selection (emptyRelation[Int], f)
 
         assertEquals (
             exp1,

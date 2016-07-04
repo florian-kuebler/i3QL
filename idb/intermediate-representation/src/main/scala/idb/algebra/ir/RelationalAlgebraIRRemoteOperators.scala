@@ -32,8 +32,9 @@
  */
 package idb.algebra.ir
 
-import idb.algebra.base.{RelationalAlgebraRemoteOperators, RelationalAlgebraBasicOperators}
-import idb.query.{QueryEnvironment, RemoteDescription}
+import idb.algebra.base.{RelationalAlgebraBasicOperators, RelationalAlgebraRemoteOperators}
+import idb.query.{Host, QueryEnvironment}
+import idb.query.colors.Color
 
 
 /**
@@ -46,24 +47,41 @@ trait RelationalAlgebraIRRemoteOperators
 {
     case class Remote[Domain : Manifest] (
         var relation: Rep[Query[Domain]],
-        thisDesc : RemoteDescription,
-		thatDesc : RemoteDescription
+		host : Host
     ) extends Def[Query[Domain]] with QueryBaseOps {
-		def isMaterialized: Boolean = relation.isMaterialized
-		def isSet = relation.isSet
-		def isIncrementLocal = relation.isIncrementLocal
+		override def isMaterialized: Boolean = relation.isMaterialized
+		override def isSet = relation.isSet
+		override def isIncrementLocal = relation.isIncrementLocal
 
-		def remoteDesc = thisDesc
+		override def color = relation.color
+
     }
 
+	case class Reclassification[Domain : Manifest] (
+		var relation : Rep[Query[Domain]],
+		newColor : Color
+	) extends Def[Query[Domain]] with QueryBaseOps {
+		override def isMaterialized: Boolean = relation.isMaterialized
+		override def isSet = relation.isSet
+		override def isIncrementLocal = relation.isIncrementLocal
 
-	def remote[Domain: Manifest] (
-		relation: Rep[Query[Domain]],
-		thisDesc : RemoteDescription,
-		thatDesc : RemoteDescription
-	)(implicit queryEnvironment : QueryEnvironment): Rep[Query[Domain]] = {
-		Remote(relation, thisDesc, thatDesc)
+		override def color = newColor
+		override def host = relation.host
 	}
+
+
+	override def remote[Domain: Manifest] (
+		relation: Rep[Query[Domain]],
+		host : Host
+	)(implicit queryEnvironment : QueryEnvironment): Rep[Query[Domain]] =
+		Remote(relation, host)
+
+
+	override def reclassification[Domain : Manifest] (
+		relation : Rep[Query[Domain]],
+		newColor : Color
+	)(implicit queryEnvironment : QueryEnvironment): Rep[Query[Domain]] =
+		Reclassification(relation, newColor)
 
 
 

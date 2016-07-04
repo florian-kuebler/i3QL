@@ -32,9 +32,13 @@
  */
 package idb.algebra.ir
 
+
 import idb.algebra.base.RelationalAlgebraBase
-import idb.annotations.{Remote, LocalIncrement}
+import idb.algebra.exceptions.NoServerAvailableException
+import idb.annotations.{LocalIncrement}
 import idb.query._
+import idb.query.colors.Color
+
 import scala.language.higherKinds
 import scala.virtualization.lms.common.BaseExp
 import scala.language.implicitConversions
@@ -65,10 +69,9 @@ trait RelationalAlgebraIRBase
          */
         def isMaterialized: Boolean
 
-		/**
-		 * Indicates to which remote descriptions (colors) this node belongs to.
-		 */
-		def remoteDesc : RemoteDescription
+		def color : Color
+
+		def host : Host
     }
 
     abstract class QueryBase[+Domain: Manifest] extends QueryBaseOps
@@ -87,23 +90,26 @@ trait RelationalAlgebraIRBase
         relation.tp.typeArguments (0).asInstanceOf[Manifest[T]]
 
 
-    case class QueryTable[Domain] (
+	case class QueryTable[Domain] (
         table: Table[Domain],
         isSet: Boolean = false,
         isIncrementLocal: Boolean = false,
         isMaterialized: Boolean = false,
-		remoteHost : Host = LocalHost,
-	    remoteDesc : RemoteDescription = DefaultDescription
+		color : Color,
+		host : Host
     )
             (implicit mDom: Manifest[Domain], mRel: Manifest[Table[Domain]])
-        extends Exp[Query[Domain]] with QueryBaseOps
+        extends Exp[Query[Domain]] with QueryBaseOps {
 
-    case class QueryRelation[Domain] (
-        table: Relation[Domain],
+	}
+
+	case class QueryRelation[Domain] (
+        relation: Relation[Domain],
         isSet: Boolean = false,
         isIncrementLocal: Boolean = false,
         isMaterialized: Boolean = false,
-		remoteDesc : RemoteDescription = DefaultDescription
+		color : Color,
+		host : Host
     )
             (implicit mDom: Manifest[Domain], mRel: Manifest[Relation[Domain]])
         extends Exp[Query[Domain]] with QueryBaseOps
@@ -114,7 +120,8 @@ trait RelationalAlgebraIRBase
 		def isMaterialized: Boolean = true //Materialization is always materialized
 		def isSet = false
 		def isIncrementLocal = false
-		def remoteDesc = relation.remoteDesc
+		def color = relation.color
+		def host = relation.host
 	}
 
 	case class Root[Domain : Manifest] (
@@ -123,7 +130,8 @@ trait RelationalAlgebraIRBase
 		def isMaterialized: Boolean = relation.isMaterialized
 		def isSet = relation.isSet
 		def isIncrementLocal = relation.isIncrementLocal
-		def remoteDesc = DefaultDescription
+		def color = Color.NO_COLOR //Root node never has any taints
+		def host : Host = Host.local //Root node is per definition on the client
 	}
 
 	//This version checks the type of the table for the annotation instead of the table itself
@@ -135,61 +143,71 @@ trait RelationalAlgebraIRBase
 		m.getClass.getAnnotation(classOf[LocalIncrement]) != null
 	}
 
-	protected def getRemoteHost (m : Any) : Host = {
+/*	protected def getRemote(m : Any) : (Color, Host) = {
 		val annotation = m.getClass.getAnnotation(classOf[Remote])
 
 		if (annotation == null)
-			LocalHost
+			(Color.NO_COLOR, LocalHost)
 		else
-			RemoteHost(annotation.host())
-	}
+			(_, RemoteHost(annotation.host()))
+	}      */
 
-	protected def getRemoteDescription (m : Any) : RemoteDescription = {
-		val annotation = m.getClass.getAnnotation(classOf[Remote])
 
-		if (annotation == null)
-			DefaultDescription
-		else
-			RemoteDescription(annotation.description())
-	}
 
     /**
      * Wraps an table as a leaf in the query tree
      */
-    override def table[Domain] (table: Table[Domain], isSet: Boolean = false, host : Host = LocalHost, remote : RemoteDescription = DefaultDescription)(
+    override def table[Domain] (table: Table[Domain], isSet: Boolean = false, color : Color = Color.NO_COLOR, host : Host = Host.local)(
         implicit mDom: Manifest[Domain],
-        mRel: Manifest[Table[Domain]]
-    ): Rep[Query[Domain]] =
-        QueryTable (
+        mRel: Manifest[Table[Domain]],
+		queryEnvironment : QueryEnvironment
+    ): Rep[Query[Domain]] = {
+
+		//val c : Color = if (color == Color.NO_COLOR) getColorAnnotation(table) else Color.NO_COLOR
+
+		val t = QueryTable (
 			table,
 			isSet = isSet,
 			isIncrementLocal = isIncrementLocal (mDom),
 			isMaterialized = false,
-		    if (host == LocalHost) getRemoteHost(table) else host,
-			if (remote == DefaultDescription) getRemoteDescription(table) else remote
+			color = color,
+			host = host
 		)
+		t
+	}
+
 
 
     /**
      * Wraps a compiled relation again as a leaf in the query tree
      */
-    override def relation[Domain] (relation: Relation[Domain], isSet: Boolean = false)(
+    override def relation[Domain] (relation: Relation[Domain], isSet: Boolean = false, color : Color = Color.NO_COLOR, host : Host = Host.local)(
         implicit mDom: Manifest[Domain],
-        mRel: Manifest[Relation[Domain]]
-    ): Rep[Query[Domain]] =
-		QueryRelation (
+        mRel: Manifest[Relation[Domain]],
+		queryEnvironment : QueryEnvironment
+    ): Rep[Query[Domain]] = {
+
+		//val c : Color = if (color == Color.NO_COLOR) getColorAnnotation(relation) else Color.NO_COLOR
+		val t = QueryRelation (
 			relation,
 			isSet = isSet,
 			isIncrementLocal = isIncrementLocal (mDom),
 			isMaterialized = false,
-			getRemoteDescription(relation)
+			color = color,
+			host = host
 		)
+		t
+	}
+		
 
 
 	override def materialize[Domain : Manifest] (
 		relation : Rep[Query[Domain]]
 	)(implicit queryEnvironment : QueryEnvironment) : Rep[Query[Domain]] =
 		Materialize(relation)
+
+
+
 
 
 

@@ -32,7 +32,9 @@
  */
 package idb.lms.extensions
 
+
 import idb.lms.extensions.print.QuoteFunction
+import idb.query.colors._
 
 import scala.virtualization.lms.common._
 import scala.reflect.SourceContext
@@ -459,6 +461,12 @@ trait FunctionUtils
 
         fun ((x: Rep[Domain]) => faUnsafe (x) || fbUnsafe (x))(mDomain, manifest[Boolean])
     }
+
+
+
+
+
+
 
 
 }

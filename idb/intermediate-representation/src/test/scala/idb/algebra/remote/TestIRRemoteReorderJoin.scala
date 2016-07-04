@@ -37,7 +37,8 @@ import idb.algebra.ir.RelationalAlgebraIRBasicOperators
 import idb.algebra.print.{RelationalAlgebraPrintPlan, RelationalAlgebraPrintPlanBasicOperators}
 import idb.lms.extensions.ScalaOpsExpOptExtensions
 import idb.lms.extensions.operations.StringOpsExpExt
-import idb.query.{QueryEnvironment, NameDescription}
+import idb.query.colors.Color
+import idb.query.{QueryEnvironment}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -49,7 +50,7 @@ import scala.virtualization.lms.common.{StringOpsExp, LiftAll}
  *
  */
 class TestIRRemoteReorderJoin
-    extends RelationalAlgebraIRDistReorderJoins
+    extends RelationalAlgebraIRRemoteReorderJoins
     with RelationalAlgebraIRBasicOperators
     with RelationalAlgebraPrintPlanBasicOperators
     with ScalaOpsExpOptExtensions
@@ -87,8 +88,8 @@ class TestIRRemoteReorderJoin
 	def testReorderJoins1(): Unit = {
 		implicit val local = QueryEnvironment.Local
 
-		val tableA = table(scala.List.empty[String], remote = NameDescription("A"))
-		val tableB = table(scala.List.empty[String], remote = NameDescription("B"))
+		val tableA = table(scala.List.empty[String], color = Color("A"))
+		val tableB = table(scala.List.empty[String], color = Color("B"))
 
 		val eqBA = // : List[(Rep[String => Any], Rep[String => Any])] =
 			scala.List(
@@ -119,9 +120,9 @@ class TestIRRemoteReorderJoin
 		//b >< (a >< c) --> a >< (b >< c)
 		implicit val local = QueryEnvironment.Local
 
-		val tableA = table(scala.List.empty[String], remote = NameDescription("A"))
-		val tableB = table(scala.List.empty[String], remote = NameDescription("B"))
-		val tableC = table(scala.List.empty[String], remote = NameDescription("C"))
+		val tableA = table(scala.List.empty[String], color = Color("A"))
+		val tableB = table(scala.List.empty[String], color = Color("B"))
+		val tableC = table(scala.List.empty[String], color = Color("C"))
 
 		val eqAC = // : List[(Rep[String => Any], Rep[String => Any])] =
 			scala.List(
@@ -164,9 +165,9 @@ class TestIRRemoteReorderJoin
 		//(a >< c) >< b --> (a >< b) >< c
 		implicit val local = QueryEnvironment.Local
 
-		val tableA = table(scala.List.empty[String], remote = NameDescription("A"))
-		val tableB = table(scala.List.empty[String], remote = NameDescription("B"))
-		val tableC = table(scala.List.empty[String], remote = NameDescription("C"))
+		val tableA = table(scala.List.empty[String], color = Color("A"))
+		val tableB = table(scala.List.empty[String], color = Color("B"))
+		val tableC = table(scala.List.empty[String], color = Color("C"))
 
 		val eqAC = // : List[(Rep[String => Any], Rep[String => Any])] =
 			scala.List(

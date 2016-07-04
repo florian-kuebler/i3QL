@@ -49,7 +49,7 @@ trait RelationalAlgebraGenBaseAsIncremental
 
     def compile[Domain] (query: Rep[Query[Domain]])(implicit queryEnvironment : QueryEnvironment): Relation[Domain] =
         query match {
-            case QueryRelation (relation, _, _, _, _) => relation
+            case QueryRelation (relation, _, _, _, _, _) => relation
 
             case QueryTable (table, _, _, _, _, _) => table
 

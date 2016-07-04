@@ -54,16 +54,21 @@ trait RelationalAlgebraPrintPlanRemoteOperators
         FunctionUtils with RelationalAlgebraIRRemoteOperators
 
 
-    import IR.{Remote, Def, Exp}
+    import IR.{Remote, Def, Exp, Reclassification}
 
 
     override def quoteRelation (x: Exp[Any]): String =
         x match {
-            case Def (Remote (relation, thisDesc, thatDesc)) =>
-                withIndent (s"remote{$thisDesc -> $thatDesc}(\n") +
+            case Def (rel@Remote (relation, newHost)) =>
+                withIndent (s"remote-->${rel.host}(\n") +
                     withMoreIndent (quoteRelation (relation) + "\n") +
                     withIndent (")")
 
+            case Def (rel@Reclassification(r, newColor)) =>
+				withIndent (s"reclass[${rel.host}](\n") +
+					withMoreIndent (quoteRelation (r) + "\n") +
+					withMoreIndent (newColor + "\n") +
+					withIndent (")")
 
 
             case _ => super.quoteRelation (x)

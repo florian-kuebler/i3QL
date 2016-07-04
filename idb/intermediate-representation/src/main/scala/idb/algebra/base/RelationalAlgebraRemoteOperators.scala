@@ -32,7 +32,8 @@
  */
 package idb.algebra.base
 
-import idb.query.{QueryEnvironment, RemoteDescription}
+import idb.query.{Host, QueryEnvironment}
+import idb.query.colors.Color
 
 /**
  *
@@ -43,10 +44,19 @@ import idb.query.{QueryEnvironment, RemoteDescription}
 trait RelationalAlgebraRemoteOperators
     extends RelationalAlgebraBase
 {
+	/**
+	  * Creates a new remote link.
+	  * @param relation The relation on the remote location.
+	  * @param host The host of this location.
+	  */
     def remote[Domain: Manifest] (
         relation: Rep[Query[Domain]],
-	    thisDesc : RemoteDescription,
-        thatDesc : RemoteDescription
+		host : Host
     )(implicit queryEnvironment : QueryEnvironment): Rep[Query[Domain]]
+
+	def reclassification[Domain : Manifest] (
+		relation : Rep[Query[Domain]],
+		newColor : Color
+	)(implicit queryEnvironment : QueryEnvironment): Rep[Query[Domain]]
 
 }
